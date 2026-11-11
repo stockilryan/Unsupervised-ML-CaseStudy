@@ -1,7 +1,6 @@
 import pandas as pd
-import numpy as np
 from sklearn.feature_selection import VarianceThreshold 
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
@@ -10,9 +9,12 @@ import textwrap
 
 
 def fill_NAN(filepath):
-    """x"""
+    """The dataset is read and the shape is printed before any missing values are filled in
+        A for loop is used to iterate through all columns, an if else statement is then used
+        to check if the feature is numerical or categorial as each case requires a different
+        approach to fill in NAN values"""
     df = pd.read_csv(filepath)
-    print("Shape before", df.shape)
+    print("Shape before any changes:", df.shape)
     print("Missing data points:", df.isnull().sum().sum())
 
     for col in df.columns:
@@ -22,17 +24,21 @@ def fill_NAN(filepath):
         else:
             if not df[col].mode().empty:
                 df[col] = df[col].fillna(df[col].mode()[0])
-    return df
-
-def one_hot_encoding(df):
-    """xxx"""
-    df = pd.get_dummies(df)
     print("Shape after filling missing values:", df.shape)
     print("Missing data points after:", df.isnull().sum().sum())
     return df
 
-def varianceT_Sscaler(df):
-    """x"""
+def one_hot_encoding(df):
+    """get dummies fetches all categorial data and converts them to numerical
+        so that the algorithm can use them"""
+    df = pd.get_dummies(df)
+    print("Shape after OHE:", df.shape)
+    return df
+
+def varianceT_Rscaler(df):
+    """Variance threshold filters out irrelevent features using the threshold
+        The robust scaler scales all data so that no feature dominates another
+        due to unit differences"""
     feature_selector = VarianceThreshold(threshold=0.01)
     feature_selector.fit(df)
     columns_selected = df.columns[feature_selector.get_support()]
@@ -40,20 +46,22 @@ def varianceT_Sscaler(df):
 
     print("Shape after Variance Threshold:", df_filtered.shape)
 
-    scaler = StandardScaler()
+    scaler = RobustScaler()
     scaled_features = scaler.fit_transform(df_filtered)
     print("Shape after scaling features:", scaled_features.shape)
     return scaled_features, df_filtered
 
 def p_c_a(scaled_features, n_components):
-    """x"""
+    """Principle Component Analysis compresses the large data set into a smaller set of
+        principle components which keeps most of the information"""
     pca = PCA(n_components)
     pca_features = pca.fit_transform(scaled_features)
     print("Shape after PCA:", pca_features.shape)
     return pca_features
 
 def elbow_method(inertia, k_range, pca_features):
-    """x"""
+    """The for loop iterates through values for k means from 1 to 10 and plots it to help us
+        decide where the point of diminishing returns is"""
     for k in k_range:
         k_means = KMeans(n_clusters = k, random_state = 42, n_init = 10)
         k_means.fit(pca_features)
@@ -70,13 +78,14 @@ def elbow_method(inertia, k_range, pca_features):
     return k_means
 
 def sil_sc(pca_features, clusters):
-    """x"""
+    """Sillhouette score is used to evaluate the effectiveness of our chosen k value from the elbow method"""
     sil_score = silhouette_score(pca_features, clusters)
     print(f"Silhouette score: {sil_score:.3f}")
     return sil_score
 
 def k_means(pca_features, df_filtered, scaled_features):
-    """x"""
+    """K means is the clustering method which groups data sets based on underlying patterns
+        the result is then plotted to make visualisation easier"""
     k_means_after = KMeans(n_clusters = 3, random_state = 42, n_init = 10)
     clusters = k_means_after.fit_predict(pca_features)
     df_filtered['Cluster'] = clusters
@@ -96,7 +105,8 @@ def k_means(pca_features, df_filtered, scaled_features):
     return df_filtered, clusters
 
 def cluster_comparison(df_filtered):
-    """x"""
+    """The top 6 features are chosen and then plotted as bar graphs with the mean to comapre againsed
+        this helps us identify differences and patterns between clusters"""
     cluster_means = df_filtered.groupby('Cluster').mean(numeric_only = True)
     total_mean = df_filtered.drop(columns = ['Cluster']).mean(numeric_only = True)
     feature_variance = cluster_means.var().sort_values(ascending = False)
@@ -133,7 +143,7 @@ if __name__ == "__main__":
 
     df_clean = fill_NAN(filepath)
     df_encode = one_hot_encoding(df_clean)
-    scaled_features, df_filtered = varianceT_Sscaler(df_encode)
+    scaled_features, df_filtered = varianceT_Rscaler(df_encode)
     pca_features = p_c_a(scaled_features, n_components)
     elbow_method(inertia, k_range, pca_features)   
     df_filtered, clusters = k_means(pca_features, df_filtered, scaled_features)
